@@ -1,0 +1,9 @@
+# Byte-compiled artifacts (users build these locally)
+*.elc
+*.eln
+
+# Emacs backup / auto-save / lock files
+*~
+\#*\#
+.\#*
+auto-save-list/
