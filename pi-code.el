@@ -130,11 +130,26 @@ Mirrors pi's rule (session-manager.ts): strip leading slash, replace
                     (not (plist-get (plist-get resp :data) :cancelled)))
                (progn
                  (let ((inhibit-read-only t))
-                   (erase-buffer)
-                   (set-marker pi-code--history-end (point)))
-                 (setq pi-code--stats nil
-                       pi-code--pending-echo nil
-                       pi-code--streaming-p nil)
+                   (erase-buffer))
+                  (setq pi-code--folds nil
+                        pi-code--widgets nil
+                        pi-code--ext-status nil
+                        pi-code--stats nil
+                        pi-code--pending-echo nil
+                        pi-code--echoed-user nil
+                        pi-code--streamed-current nil
+                        pi-code--streamed-text nil
+                        pi-code--assistant-open nil
+                        pi-code--msg-start nil
+                        pi-code--thinking-start nil
+                        pi-code--queue nil
+                        pi-code--last-reply nil
+                        pi-code--spinner-index 0
+                        pi-code--last-index nil
+                        pi-code--streaming-p nil)
+                  (pi-code--insert-banner)
+                  (set-marker pi-code--history-end (point-max))
+                  (pi-code--insert-prompt)
                  (pi-code--update-header)
                  (pi-code--refresh-stats)
                  (message "pi-code: new session"))
@@ -283,10 +298,70 @@ Avoids minibuffer interaction inside the process filter."
                      (format " (failed: %s)"
                              (or (plist-get resp :error) "unknown"))))))))))
 
+(defun pi-code-compact (&optional instructions)
+  "Manually compact the conversation context.
+With a prefix argument, prompt for custom INSTRUCTIONS."
+  (interactive
+   (list (when current-prefix-arg
+           (read-string "Compaction instructions: "))))
+  (let ((session (pi-code--chat-session))
+        (command (list :type "compact")))
+    (when (and instructions (not (string-empty-p instructions)))
+      (setq command (plist-put command :customInstructions instructions)))
+    (pi-code-rpc-send
+     session command
+     (lambda (_sess resp)
+       (message "pi-code: %s"
+                (if (plist-get resp :success)
+                    "context compacted"
+                  (format "compaction failed: %s"
+                          (or (plist-get resp :error) "unknown"))))))))
+
+;;; Menu
+
+(require 'transient nil t)
+
+(defconst pi-code--transient-new-p
+  (and (featurep 'transient) (fboundp 'transient--set-layout))
+  "Non-nil when transient is new enough for the `pi-code-menu' layout.")
+
+(if pi-code--transient-new-p
+    ;; Evaluated at load time (not compile time) so this file also
+    ;; compiles and loads where transient is missing or too old.
+    (eval '(transient-define-prefix pi-code-menu ()
+             "Transient menu for common pi-code actions."
+             [["Model"
+               ("m" "switch model" pi-code-switch-model)
+               ("c" "cycle model" pi-code-cycle-model)
+               ("t" "thinking level" pi-code-set-thinking)]
+              ["Context"
+               ("k" "compact context" pi-code-compact)
+               ("y" "copy last reply" pi-code-copy-last-reply)]]
+             [["Session"
+               ("n" "new session" pi-code-new-session)
+               ("r" "resume session" pi-code-resume)
+               ("q" "quit session" pi-code-quit)]]))
+  (defun pi-code-menu ()
+    "Dispatch common pi-code actions.
+Fallback used when transient is unavailable or too old."
+    (interactive)
+    (let* ((actions '(("switch model" . pi-code-switch-model)
+                      ("cycle model" . pi-code-cycle-model)
+                      ("thinking level" . pi-code-set-thinking)
+                      ("compact context" . pi-code-compact)
+                      ("copy last reply" . pi-code-copy-last-reply)
+                      ("new session" . pi-code-new-session)
+                      ("resume session" . pi-code-resume)
+                      ("quit session" . pi-code-quit)))
+           (choice (completing-read "pi-code: " actions nil t)))
+      (when choice
+        (call-interactively (cdr (assoc choice actions)))))))
+
 ;;; Key bindings
 
 (define-key pi-code-chat-mode-map (kbd "C-c C-m") #'pi-code-switch-model)
 (define-key pi-code-chat-mode-map (kbd "C-c C-t") #'pi-code-set-thinking)
+(define-key pi-code-chat-mode-map (kbd "C-c C-a") 'pi-code-menu)
 (define-key pi-code-chat-mode-map (kbd "C-c C-n") #'pi-code-new-session)
 (define-key pi-code-chat-mode-map (kbd "C-c C-r") #'pi-code-resume)
 (define-key pi-code-chat-mode-map (kbd "C-c C-q") #'pi-code-quit)
@@ -296,9 +371,12 @@ Avoids minibuffer interaction inside the process filter."
   (evil-define-key* '(normal insert) pi-code-chat-mode-map
     (kbd "C-c C-m") #'pi-code-switch-model
     (kbd "C-c C-t") #'pi-code-set-thinking
+    (kbd "C-c C-a") 'pi-code-menu
     (kbd "C-c C-n") #'pi-code-new-session
     (kbd "C-c C-r") #'pi-code-resume
-    (kbd "C-c C-q") #'pi-code-quit))
+    (kbd "C-c C-q") #'pi-code-quit
+    (kbd "C-c C-o") #'pi-code-open-file-at-point
+    (kbd "C-c C-y") #'pi-code-copy-last-reply))
 
 (if (featurep 'evil)
     (pi-code--extra-evil-bindings)

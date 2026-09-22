@@ -43,7 +43,7 @@
       (pi-code--handle-event '(:type "message_end"
                                :message (:role "user" :content "hello"))))
     (with-current-buffer buf
-      (should (= (pi-code-chat-test--count "## You" (buffer-string)) 1))
+      (should (= (pi-code-chat-test--count "\\* You" (buffer-string)) 1))
       (should (null pi-code--pending-echo)))
     (kill-buffer buf)))
 
@@ -59,7 +59,7 @@
                                         :stopReason "error"
                                         :errorMessage "404 boom"))
                           '(:type "agent_settled")))))
-    (should (= (pi-code-chat-test--count "## pi" text) 1))
+    (should (= (pi-code-chat-test--count "\\* pi" text) 1))
     (should (string-match-p "\\[error: 404 boom\\]" text))
     (kill-buffer buf)))
 
@@ -80,7 +80,7 @@
                              :message (:role "assistant"
                                         :content ((:type "text" :text "Hello"))))
                           '(:type "agent_settled")))))
-    (should (string-match-p "## pi" text))
+    (should (string-match-p "\\* pi" text))
     (should (string-match-p "Hello" text))
     (should (= (pi-code-chat-test--count "Hello" text) 1))
     (kill-buffer buf)))

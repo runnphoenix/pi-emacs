@@ -37,5 +37,12 @@
       (should (equal (pi-code--session-files "/home/chris/") (list b a))))
     (delete-directory root t)))
 
+(ert-deftest pi-code-test-menu-defined ()
+  "The transient menu and compact command are wired up."
+  (should (fboundp 'pi-code-menu))
+  (should (fboundp 'pi-code-compact))
+  (should (eq (lookup-key pi-code-chat-mode-map (kbd "C-c C-a"))
+              'pi-code-menu)))
+
 (provide 'pi-code-test)
 ;;; pi-code-test.el ends here
